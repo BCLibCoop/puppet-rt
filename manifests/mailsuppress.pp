@@ -2,7 +2,6 @@
 class rt::mailsuppress (
     $ensure = 'present'
      ) {
-    include rt::params
     #
    file { '/etc/request-tracker3.8/RT_SiteConfig.d/60-mail-suppress':
     ensure  => 'file',
