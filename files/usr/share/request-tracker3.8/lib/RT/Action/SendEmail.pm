@@ -281,6 +281,13 @@ sub SendMessage {
     my $msgid = $MIMEObj->head->get('Message-ID');
     chomp $msgid;
 
+   # BEGIN MOD:
+   # Do not send mail if the config says not to:
+   if (RT->Config->Get('EmailSuppress')) {
+       return (1);
+   }
+   # END MOD:
+
     $self->ScripActionObj->{_Message_ID}++;
 
     $RT::Logger->info( $msgid . " #"
