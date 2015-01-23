@@ -3,12 +3,6 @@ class rt::prioasstring (
     $ensure = 'present'
      ) {
     #
-   file { '/etc/request-tracker3.8/RT_SiteConfig.d/':
-     ensure => directory,
-     mode   => '0755',
-     owner  => 'root',
-     group  => 'root',
-  }
 
    file { '/etc/request-tracker3.8/RT_SiteConfig.d/70-prioasstring':
     ensure  => 'present',
