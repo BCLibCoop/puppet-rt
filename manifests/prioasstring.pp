@@ -10,6 +10,7 @@ class rt::prioasstring (
     $order = 'qw(None Low Medium High Urgent)',
     $config_file = "${rt::params::rt_dir}/RT_SiteConfig.d/70-prioasstring"
 ) {
+  include rt::params
 
   file { $config_file:
     ensure  => $ensure,
