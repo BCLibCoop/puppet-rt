@@ -1,5 +1,5 @@
 #
-class RT::PrioAsString (
+class rt::prioasstring (
     $ensure = 'present'
      ) {
     #
