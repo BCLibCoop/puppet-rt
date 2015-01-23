@@ -1,0 +1,29 @@
+#CONVERTED TO NEW PLUGIN FROM OLD PLUGIN - JF
+# Specify a mapping between priority strings and the internal
+# numeric representation
+Set(%PriorityAsString, (None => 0, Low => 10, Medium => 50, High => 70, Urgent => 90));
+# which order to display the priority strings
+# if you don't specify this, the strings in the PriorityAsString
+# hash will be sorted and displayed
+Set(@PriorityAsStringOrder, qw(None Low Medium High Urgent));
+
+# How to display ticket priority
+# This can change to/from anytime; presentation only & doesn't affect the
+# database; must restart web server to take effect
+#
+#  0 - DEFAULT: integer value  (0-99)
+#  1 - use label values (as seen in %PriorityLabels)
+#  >1 - use label values, but also display ## (eg "General/35")
+#  if using "bubbling priorities", good to set this
+
+#$PriorityType = 1;
+#
+## Priority labels; 0 = None; 1 < Low <= 10; 11 <= Medium <= 50; etc...
+#%PriorityLabels = ( 'None' => 0, 'Low' => 10, 'Medium' => 50,
+#                        'High' => 70, 'Urgent' => 90 );
+#
+## (leave @PrioritySortedKeys alone; used to set label for priorities)
+#@PrioritySortedKeys = reverse sort { $PriorityLabels{ $a } <=>
+#                                     $PriorityLabels{ $b } }
+#                        keys %PriorityLabels;
+#@InactiveStatus = qw(didntfix noresponse resolved rejected deleted FREQS) unless @InactiveStatus;
