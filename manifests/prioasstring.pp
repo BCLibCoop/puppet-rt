@@ -9,8 +9,7 @@ class rt::prioasstring (
     $priorities = '(None => 0, Low => 10, Medium => 50, High => 70, Urgent => 90)',
     $order = 'qw(None Low Medium High Urgent)',
     $config_file = "${rt::params::rt_dir}/RT_SiteConfig.d/70-prioasstring"
-) {
-  include rt::params
+) inherits ::rt::params {
 
   file { $config_file:
     ensure  => $ensure,
