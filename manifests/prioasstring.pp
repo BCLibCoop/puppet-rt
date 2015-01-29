@@ -4,6 +4,7 @@
 #   Ubuntu/Debian have per-plugin config files (also need to fix the notifies)
 #   Redhat has it all it one file, this needs to be made extensible
 # - Take a better data structure for the configuration input or priorities/order
+#
 class rt::prioasstring (
     $ensure = 'present',
     $priorities = '(None => 0, Low => 10, Medium => 50, High => 70, Urgent => 90)',
