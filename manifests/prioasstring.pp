@@ -17,7 +17,7 @@ class rt::prioasstring (
     mode    => '0600',
     owner   => 'root',
     group   => 'root',
-    require => File['/etc/request-tracker3.8/RT_SiteConfig.d/'],
+    require => File['/etc/request-tracker4/RT_SiteConfig.d/'],
     #notify  => Exec['update-rt-siteconfig'],
   }
 
