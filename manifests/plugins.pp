@@ -10,7 +10,7 @@ class rt::plugins (
     $config_file = "${rt::params::rt_dir}/RT_SiteConfig.d/55-plugins"
 ) inherits ::rt::params {
 
-  file { $config_file:
+  concat { $config_file:
     ensure  => $ensure,
     mode    => '0600',
     owner   => 'root',
@@ -19,28 +19,22 @@ class rt::plugins (
     #notify  => Exec['update-rt-siteconfig'],
   }
 
-  file_line { 'InitPluginList':
-    ensure => $ensure,
-    path   => $config_file,
-#    match  => '^Set..PriorityAsString,',
-    line   => "Set(@Plugins, qw());",
+  concat::fragment { 'InitPluginList':
+    target  => $config_file,
+    content => "Set(@Plugins, qw());",
     #notify => Exec['update-rt-siteconfig'],
   }
 
 
-  file_line { 'RTFMPlugin':
-    ensure => $ensure,
-    path   => $config_file,
-#    match  => '^Set..PriorityAsString,',
-    line   => "Set(@Plugins, push('RT::FM'));",
+  concat::fragment { 'RTFMPlugin':
+    target  => $config_file,
+    content => "Set(@Plugins, push('RT::FM'));",
     #notify => Exec['update-rt-siteconfig'],
   }
 
-  file_line { 'PriorityAsStringPlugin':
-    ensure => $ensure,
-    path   => $config_file,
-#    match  => '^Set..PriorityAsStringOrder,',
-    line   => "Set(@Plugins, push('RT::Extension::PriorityAsString'));",
+  concat::fragment { 'PriorityAsStringPlugin':
+    target => $config_file,
+    content => "Set(@Plugins, push('RT::Extension::PriorityAsString'));",
     #notify => Exec['update-rt-siteconfig'],
   }
 }

@@ -12,7 +12,7 @@ class rt::prioasstring (
     $config_file = "${rt::params::rt_dir}/RT_SiteConfig.d/70-prioasstring"
 ) inherits ::rt::params {
 
-  file { $config_file:
+  concat { $config_file:
     ensure  => $ensure,
     mode    => '0600',
     owner   => 'root',
@@ -21,18 +21,14 @@ class rt::prioasstring (
     #notify  => Exec['update-rt-siteconfig'],
   }
 
-  file_line { 'PriorityAsString':
-    ensure => $ensure,
-    path   => $config_file,
-    match  => '^Set..PriorityAsString,',
+  concat::fragment { 'PriorityAsString':
+    target => $config_file,
     line   => "Set(%PriorityAsString, ${priorities});",
     #notify => Exec['update-rt-siteconfig'],
   }
 
-  file_line { 'PriorityAsStringOrder':
-    ensure => $ensure,
-    path   => $config_file,
-    match  => '^Set..PriorityAsStringOrder,',
+  concat::fragment { 'PriorityAsStringOrder':
+    target   => $config_file,
     line   => "Set(@PriorityAsStringOrder, ${order});",
     #notify => Exec['update-rt-siteconfig'],
   }
