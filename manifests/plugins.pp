@@ -15,6 +15,7 @@ class rt::plugins (
     mode    => '0600',
     owner   => 'root',
     group   => 'root',
+    replace => 'true',
     require => File['/etc/request-tracker3.8/RT_SiteConfig.d/'],
     #notify  => Exec['update-rt-siteconfig'],
   }
@@ -22,6 +23,7 @@ class rt::plugins (
   concat::fragment { 'InitPluginList':
     target  => $config_file,
     content => "my @_plugins;\n",
+    order   => '01',
     #notify => Exec['update-rt-siteconfig'],
   }
 
@@ -29,18 +31,21 @@ class rt::plugins (
   concat::fragment { 'RTFMPlugin':
     target  => $config_file,
     content => "push(@_plugins, 'RT::FM');\n",
+    order   => '02',
     #notify => Exec['update-rt-siteconfig'],
   }
 
   concat::fragment { 'PriorityAsStringPlugin':
     target => $config_file,
     content => "push(@_plugins, 'RT::Extension::PriorityAsString');\n",
+    order   => '03',
     #notify => Exec['update-rt-siteconfig'],
   }
 
   concat::fragment { 'ClosePluginList':
     target => $config_file,
     content => "Set(@Plugins, @_plugins);\n",
+    order   => '04',
     #notify => Exec['update-rt-siteconfig'],
   }
 }
