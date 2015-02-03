@@ -22,14 +22,14 @@ class rt::prioasstring (
   }
 
   concat::fragment { "${config_file}_prioasstring":
-    target => $config_file,
-    line   => "Set(%PriorityAsString, ${priorities});",
+    target  => $config_file,
+    content => "Set(%PriorityAsString, ${priorities});",
     #notify => Exec['update-rt-siteconfig'],
   }
 
   concat::fragment { "${config_file}_prioasstringorder":
-    target   => $config_file,
-    line   => "Set(@PriorityAsStringOrder, ${order});",
+    target  => $config_file,
+    content => "Set(@PriorityAsStringOrder, ${order});",
     #notify => Exec['update-rt-siteconfig'],
   }
 }
