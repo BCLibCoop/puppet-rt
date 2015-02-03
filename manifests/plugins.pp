@@ -21,20 +21,26 @@ class rt::plugins (
 
   concat::fragment { 'InitPluginList':
     target  => $config_file,
-    content => "Set(@Plugins, qw());\n",
+    content => "my @_plugins;\n",
     #notify => Exec['update-rt-siteconfig'],
   }
 
 
   concat::fragment { 'RTFMPlugin':
     target  => $config_file,
-    content => "Set(@Plugins, push('RT::FM'));\n",
+    content => "push(@_plugins, 'RT::FM');\n",
     #notify => Exec['update-rt-siteconfig'],
   }
 
   concat::fragment { 'PriorityAsStringPlugin':
     target => $config_file,
-    content => "Set(@Plugins, push('RT::Extension::PriorityAsString'));\n",
+    content => "push(@_plugins, 'RT::Extension::PriorityAsString');\n",
+    #notify => Exec['update-rt-siteconfig'],
+  }
+
+  concat::fragment { 'ClosePluginList':
+    target => $config_file,
+    content => "Set(@Plugins, @_plugins);\n",
     #notify => Exec['update-rt-siteconfig'],
   }
 }
