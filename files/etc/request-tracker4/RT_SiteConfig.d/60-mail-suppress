@@ -1,0 +1,3 @@
+# Suppress all outgoing emails
+#
+Set($EmailSuppress, '1');
