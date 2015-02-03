@@ -55,5 +55,12 @@ class rt::plugins (
     order   => '05',
     #notify => Exec['update-rt-siteconfig'],
   }
+
+  concat::fragment { 'DefaultQueue':
+    target => $config_file,
+    content => "Set($DefaultQueue, 'Support');\n",
+    order   => '05',
+    #notify => Exec['update-rt-siteconfig'],
+  }
 }
 # vim: set ft=puppet si sts=2 et tw=80 sw=2:
