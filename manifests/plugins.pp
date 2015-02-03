@@ -15,7 +15,7 @@ class rt::plugins (
     mode    => '0600',
     owner   => 'root',
     group   => 'root',
-    replace => 'true',
+    replace => true,
     require => File['/etc/request-tracker3.8/RT_SiteConfig.d/'],
     #notify  => Exec['update-rt-siteconfig'],
   }
