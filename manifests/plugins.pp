@@ -27,14 +27,6 @@ class rt::plugins (
     #notify => Exec['update-rt-siteconfig'],
   }
 
-
-  concat::fragment { 'RTFMPlugin':
-    target  => $config_file,
-    content => "push(@_plugins, 'RT::FM');\n",
-    order   => '02',
-    #notify => Exec['update-rt-siteconfig'],
-  }
-
   concat::fragment { 'PriorityAsStringPlugin':
     target => $config_file,
     content => "push(@_plugins, 'RT::Extension::PriorityAsString');\n",
