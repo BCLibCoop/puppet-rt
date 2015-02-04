@@ -43,7 +43,7 @@ class rt::plugins (
 
   concat::fragment { 'TicketLifecycles':
     target => $config_file,
-    content => "Set(@Lifecycles, qw(resolved didntfix noresponse rejected deleted featurereq));\n",
+    content => "# Set(@Lifecycles, qw(resolved didntfix noresponse rejected deleted featurereq));\n",
     order   => '05',
     #notify => Exec['update-rt-siteconfig'],
   }
