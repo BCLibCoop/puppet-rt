@@ -135,13 +135,15 @@ Builds an outgoing email we're going to send using scrip's template.
 sub Prepare {
     my $self = shift;
 
-    my ( $result, $message ) = $self->TemplateObj->Parse(
-        Argument       => $self->Argument,
-        TicketObj      => $self->TicketObj,
-        TransactionObj => $self->TransactionObj
-    );
-    if ( !$result ) {
-        return (undef);
+    unless ( $self->TemplateObj->MIMEObj ) {
+        my ( $result, $message ) = $self->TemplateObj->Parse(
+            Argument       => $self->Argument,
+            TicketObj      => $self->TicketObj,
+            TransactionObj => $self->TransactionObj
+        );
+        if ( !$result ) {
+            return (undef);
+        }
     }
 
     my $MIMEObj = $self->TemplateObj->MIMEObj;
@@ -179,12 +181,6 @@ sub Prepare {
             && !$MIMEObj->head->get('To')
             && ( $MIMEObj->head->get('Cc') or $MIMEObj->head->get('Bcc') );
 
-    # We should never have to set the MIME-Version header
-    $self->SetHeader( 'MIME-Version', '1.0' );
-
-    # fsck.com #5959: Since RT sends 8bit mail, we should say so.
-    $self->SetHeader( 'Content-Transfer-Encoding', '8bit' );
-
     # For security reasons, we only send out textual mails.
     foreach my $part ( grep !$_->is_multipart, $MIMEObj->parts_DFS ) {
         my $type = $part->mime_type || 'text/plain';
@@ -195,9 +191,12 @@ sub Prepare {
         $part->head->mime_attr( "Content-Type.charset" => 'utf-8' );
     }
 
-    RT::I18N::SetMIMEEntityToEncoding( $MIMEObj,
-        RT->Config->Get('EmailOutputEncoding'),
-        'mime_words_ok', );
+    RT::I18N::SetMIMEEntityToEncoding(
+        Entity        => $MIMEObj,
+        Encoding      => RT->Config->Get('EmailOutputEncoding'),
+        PreserveWords => 1,
+        IsOut         => 1,
+    );
 
     # Build up a MIME::Entity that looks like the original message.
     $self->AddAttachments if ( $MIMEObj->head->get('RT-Attach-Message')
@@ -218,7 +217,7 @@ sub Prepare {
             'Success';
     }
 
-    return $result;
+    return 1;
 }
 
 =head2 To
@@ -258,7 +257,7 @@ sub Bcc {
 sub AddressesFromHeader {
     my $self      = shift;
     my $field     = shift;
-    my $header    = $self->TemplateObj->MIMEObj->head->get($field);
+    my $header    = Encode::decode("UTF-8",$self->TemplateObj->MIMEObj->head->get($field));
     my @addresses = Email::Address->parse($header);
 
     return (@addresses);
@@ -277,7 +276,7 @@ sub SendMessage {
     # ability to pass @_ to a 'post' routine.
     my ( $self, $MIMEObj ) = @_;
 
-    my $msgid = $MIMEObj->head->get('Message-ID');
+    my $msgid = Encode::decode( "UTF-8", $MIMEObj->head->get('Message-ID') );
     chomp $msgid;
 
     # BEGIN MOD:
@@ -307,7 +306,7 @@ sub SendMessage {
 
     my $success = $msgid . " sent ";
     foreach (@EMAIL_RECIPIENT_HEADERS) {
-        my $recipients = $MIMEObj->head->get($_);
+        my $recipients = Encode::decode( "UTF-8", $MIMEObj->head->get($_) );
         $success .= " $_: " . $recipients if $recipients;
     }
 
@@ -414,6 +413,7 @@ sub AddAttachment {
         Data        => $attach->OriginalContent,
         Disposition => $disp,
         Filename    => $self->MIMEEncodeString( $attach->Filename ),
+        Id          => $attach->GetHeader('Content-ID'),
         'RT-Attachment:' => $self->TicketObj->Id . "/"
             . $self->TransactionObj->Id . "/"
             . $attach->id,
@@ -538,7 +538,7 @@ sub RecordOutgoingMailTransaction {
         $type = 'EmailRecord';
     }
 
-    my $msgid = $MIMEObj->head->get('Message-ID');
+    my $msgid = Encode::decode( "UTF-8", $MIMEObj->head->get('Message-ID') );
     chomp $msgid;
 
     my ( $id, $msg ) = $transaction->Create(
@@ -608,16 +608,10 @@ sub SetRTSpecialHeaders {
         }
     }
 
-    if (my $precedence = RT->Config->Get('DefaultMailPrecedence')
-        and !$self->TemplateObj->MIMEObj->head->get("Precedence")
-    ) {
-        $self->SetHeader( 'Precedence', $precedence );
-    }
-
     $self->SetHeader( 'X-RT-Loop-Prevention', RT->Config->Get('rtname') );
-    $self->SetHeader( 'RT-Ticket',
+    $self->SetHeader( 'X-RT-Ticket',
         RT->Config->Get('rtname') . " #" . $self->TicketObj->id() );
-    $self->SetHeader( 'Managed-by',
+    $self->SetHeader( 'X-Managed-by',
         "RT $RT::VERSION (http://www.bestpractical.com/rt/)" );
 
 # XXX, TODO: use /ShowUser/ShowUserEntry(or something like that) when it would be
@@ -625,7 +619,7 @@ sub SetRTSpecialHeaders {
     if ( my $email = $self->TransactionObj->CreatorObj->EmailAddress
          and RT->Config->Get('UseOriginatorHeader')
     ) {
-        $self->SetHeader( 'RT-Originator', $email );
+        $self->SetHeader( 'X-RT-Originator', $email );
     }
 
 }
@@ -656,7 +650,7 @@ sub DeferDigestRecipients {
 
         # Have to get the list of addresses directly from the MIME header
         # at this point.
-        $RT::Logger->debug( $self->TemplateObj->MIMEObj->head->as_string );
+        $RT::Logger->debug( Encode::decode( "UTF-8", $self->TemplateObj->MIMEObj->head->as_string ) );
         foreach my $rcpt ( map { $_->address } $self->AddressesFromHeader($mailfield) ) {
             next unless $rcpt;
             my $user_obj = RT::User->new(RT->SystemUser);
@@ -745,15 +739,29 @@ Remove addresses that are RT addresses or that are on this transaction's blackli
 
 =cut
 
+my %squelch_reasons = (
+    'not privileged'
+        => "because autogenerated messages are configured to only be sent to privileged users (RedistributeAutoGeneratedMessages)",
+    'squelch:attachment'
+        => "by RT-Squelch-Replies-To header in the incoming message",
+    'squelch:transaction'
+        => "by notification checkboxes for this transaction",
+    'squelch:ticket'
+        => "by notification checkboxes on this ticket's People page",
+);
+
+
 sub RemoveInappropriateRecipients {
     my $self = shift;
 
-    my @blacklist = ();
+    my %blacklist = ();
 
     # If there are no recipients, don't try to send the message.
     # If the transaction has content and has the header RT-Squelch-Replies-To
 
-    my $msgid = $self->TemplateObj->MIMEObj->head->get('Message-Id');
+    my $msgid = Encode::decode( "UTF-8", $self->TemplateObj->MIMEObj->head->get('Message-Id') );
+    chomp $msgid;
+
     if ( my $attachment = $self->TransactionObj->Attachments->First ) {
 
         if ( $attachment->GetHeader('RT-DetectedAutoGenerated') ) {
@@ -762,7 +770,9 @@ sub RemoveInappropriateRecipients {
             # caused by one of the watcher addresses being broken.
             # Default ("true") is to redistribute, for historical reasons.
 
-            if ( !RT->Config->Get('RedistributeAutoGeneratedMessages') ) {
+            my $redistribute = RT->Config->Get('RedistributeAutoGeneratedMessages');
+
+            if ( !$redistribute ) {
 
                 # Don't send to any watchers.
                 @{ $self->{$_} } = () for (@EMAIL_RECIPIENT_HEADERS);
@@ -770,16 +780,15 @@ sub RemoveInappropriateRecipients {
                         . " The incoming message was autogenerated. "
                         . "Not redistributing this message based on site configuration."
                 );
-            } elsif ( RT->Config->Get('RedistributeAutoGeneratedMessages') eq
-                'privileged' )
-            {
+            } elsif ( $redistribute eq 'privileged' ) {
 
                 # Only send to "privileged" watchers.
                 foreach my $type (@EMAIL_RECIPIENT_HEADERS) {
                     foreach my $addr ( @{ $self->{$type} } ) {
                         my $user = RT::User->new(RT->SystemUser);
                         $user->LoadByEmail($addr);
-                        push @blacklist, $addr unless $user->id && $user->Privileged;
+                        $blacklist{ $addr } ||= 'not privileged'
+                            unless $user->id && $user->Privileged;
                     }
                 }
                 $RT::Logger->info( $msgid
@@ -790,46 +799,86 @@ sub RemoveInappropriateRecipients {
         }
 
         if ( my $squelch = $attachment->GetHeader('RT-Squelch-Replies-To') ) {
-            push @blacklist, split( /,/, $squelch );
+            $blacklist{ $_->address } ||= 'squelch:attachment'
+                foreach Email::Address->parse( $squelch );
         }
     }
 
-    # Let's grab the SquelchMailTo attributes and push those entries into the @blacklisted
-    push @blacklist, map $_->Content, $self->TicketObj->SquelchMailTo, $self->TransactionObj->SquelchMailTo;
+    # Let's grab the SquelchMailTo attributes and push those entries
+    # into the blacklisted
+    $blacklist{ $_->Content } ||= 'squelch:transaction'
+        foreach $self->TransactionObj->SquelchMailTo;
+    $blacklist{ $_->Content } ||= 'squelch:ticket'
+        foreach $self->TicketObj->SquelchMailTo;
 
-    # Cycle through the people we're sending to and pull out anyone on the
-    # system blacklist
+    # canonicalize emails
+    foreach my $address ( keys %blacklist ) {
+        my $reason = delete $blacklist{ $address };
+        $blacklist{ lc $_ } = $reason
+            foreach map RT::User->CanonicalizeEmailAddress( $_->address ),
+            Email::Address->parse( $address );
+    }
 
-    # Trim leading and trailing spaces. 
-    @blacklist = map { RT::User->CanonicalizeEmailAddress( $_->address ) }
-        Email::Address->parse( join ', ', grep defined, @blacklist );
+    $self->RecipientFilter(
+        Callback => sub {
+            return unless RT::EmailParser->IsRTAddress( $_[0] );
+            return "$_[0] appears to point to this RT instance. Skipping";
+        },
+        All => 1,
+    );
 
-    foreach my $type (@EMAIL_RECIPIENT_HEADERS) {
+    $self->RecipientFilter(
+        Callback => sub {
+            return unless $blacklist{ lc $_[0] };
+            return "$_[0] is blacklisted $squelch_reasons{ $blacklist{ lc $_[0] } }. Skipping";
+        },
+    );
+
+
+    # Cycle through the people we're sending to and pull out anyone that meets any of the callbacks
+    for my $type (@EMAIL_RECIPIENT_HEADERS) {
         my @addrs;
-        foreach my $addr ( @{ $self->{$type} } ) {
 
-         # Weed out any RT addresses. We really don't want to talk to ourselves!
-         # If we get a reply back, that means it's not an RT address
-            if ( !RT::EmailParser->CullRTAddresses($addr) ) {
-                $RT::Logger->info( $msgid . "$addr appears to point to this RT instance. Skipping" );
-                next;
-            }
-            if ( grep $addr eq $_, @blacklist ) {
-                $RT::Logger->info( $msgid . "$addr was blacklisted for outbound mail on this transaction. Skipping");
-                next;
+      ADDRESS:
+        for my $addr ( @{ $self->{$type} } ) {
+            for my $filter ( map {$_->{Callback}} @{$self->{RecipientFilter}} ) {
+                my $skip = $filter->($addr);
+                next unless $skip;
+                $RT::Logger->info( "$msgid $skip" );
+                next ADDRESS;
             }
             push @addrs, $addr;
         }
-        foreach my $addr ( @{ $self->{'NoSquelch'}{$type} || [] } ) {
-            # never send email to itself
-            if ( !RT::EmailParser->CullRTAddresses($addr) ) {
-                $RT::Logger->info( $msgid . "$addr appears to point to this RT instance. Skipping" );
-                next;
+
+      NOSQUELCH_ADDRESS:
+        for my $addr ( @{ $self->{NoSquelch}{$type} } ) {
+            for my $filter ( map {$_->{Callback}} grep {$_->{All}} @{$self->{RecipientFilter}} ) {
+                my $skip = $filter->($addr);
+                next unless $skip;
+                $RT::Logger->info( "$msgid $skip" );
+                next NOSQUELCH_ADDRESS;
             }
             push @addrs, $addr;
         }
+
         @{ $self->{$type} } = @addrs;
     }
+}
+
+=head2 RecipientFilter Callback => SUB, [All => 1]
+
+Registers a filter to be applied to addresses by
+L<RemoveInappropriateRecipients>.  The C<Callback> will be called with
+one address at a time, and should return false if the address should
+receive mail, or a message explaining why it should not be.  Passing a
+true value for C<All> will cause the filter to also be applied to
+NoSquelch (one-time Cc and Bcc) recipients as well.
+
+=cut
+
+sub RecipientFilter {
+    my $self = shift;
+    push @{ $self->{RecipientFilter}}, {@_};
 }
 
 =head2 SetReturnAddress is_comment => BOOLEAN
@@ -925,7 +974,8 @@ sub GetFriendlyName {
 
 =head2 SetHeader FIELD, VALUE
 
-Set the FIELD of the current MIME object into VALUE.
+Set the FIELD of the current MIME object into VALUE, which should be in
+characters, not bytes.  Returns the new header, in bytes.
 
 =cut
 
@@ -938,7 +988,7 @@ sub SetHeader {
     chomp $field;
     my $head = $self->TemplateObj->MIMEObj->head;
     $head->fold_length( $field, 10000 );
-    $head->replace( $field, $val );
+    $head->replace( $field, Encode::encode( "UTF-8", $val ) );
     return $head->get($field);
 }
 
@@ -979,7 +1029,7 @@ sub SetSubject {
 
     $subject =~ s/(\r\n|\n|\s)/ /g;
 
-    $self->SetHeader( 'Subject', Encode::encode_utf8( $subject ) );
+    $self->SetHeader( 'Subject', $subject );
 
 }
 
@@ -995,11 +1045,9 @@ sub SetSubjectToken {
     my $head = $self->TemplateObj->MIMEObj->head;
     $self->SetHeader(
         Subject =>
-            Encode::encode_utf8(
-                RT::Interface::Email::AddSubjectTag(
-                    Encode::decode_utf8( $head->get('Subject') ),
-                    $self->TicketObj,
-                ),
+            RT::Interface::Email::AddSubjectTag(
+                Encode::decode( "UTF-8", $head->get('Subject') ),
+                $self->TicketObj,
             ),
     );
 }
@@ -1082,18 +1130,14 @@ Returns a fake Message-ID: header for the ticket to allow a base level of thread
 =cut
 
 sub PseudoReference {
-
     my $self = shift;
-    my $pseudo_ref
-        = '<RT-Ticket-'
-        . $self->TicketObj->id . '@'
-        . RT->Config->Get('Organization') . '>';
-    return $pseudo_ref;
+    return RT::Interface::Email::PseudoReference( $self->TicketObj );
 }
 
 =head2 SetHeaderAsEncoding($field_name, $charset_encoding)
 
-This routine converts the field into specified charset encoding.
+This routine converts the field into specified charset encoding, then
+applies the MIME-Header transfer encoding.
 
 =cut
 
@@ -1103,13 +1147,8 @@ sub SetHeaderAsEncoding {
 
     my $head = $self->TemplateObj->MIMEObj->head;
 
-    if ( lc($field) eq 'from' and RT->Config->Get('SMTPFrom') ) {
-        $head->replace( $field, RT->Config->Get('SMTPFrom') );
-        return;
-    }
-
-    my $value = $head->get( $field );
-    $value = $self->MIMEEncodeString( $value, $enc );
+    my $value = Encode::decode("UTF-8", $head->get( $field ));
+    $value = $self->MIMEEncodeString( $value, $enc ); # Returns bytes
     $head->replace( $field, $value );
 
 }
@@ -1119,7 +1158,8 @@ sub SetHeaderAsEncoding {
 Takes a perl string and optional encoding pass it over
 L<RT::Interface::Email/EncodeToMIME>.
 
-Basicly encode a string using B encoding according to RFC2047.
+Basicly encode a string using B encoding according to RFC2047, returning
+bytes.
 
 =cut
 
